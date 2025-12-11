@@ -1,0 +1,16 @@
+name: Telegram payment post scheduler
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping-cron-endpoint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Deno Deploy cron endpoint
+        run: |
+          curl -sS "https://YOUR_DENO_APP_URL/cron?secret=${CRON_SECRET}"
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
