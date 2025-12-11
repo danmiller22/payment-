@@ -22,12 +22,12 @@ const MESSAGE_TEXT = [
   "",
   "750 сом вы оплачиваете перед вступлением в группу и ещё 750 сом – после того, как найдёте через нас квартиру.",
   "",
-  "В день в закрытой группе публикуется до 100 новых, бюджетных квартир. В среднем жильё находится за 1–3 дня.",
+  "В день в закрытой группе публикуется до 100 новых, бюджетных квартир. Наши клиенты в среднем находят жильё за 1–3 дня.",
   "",
-  "1) Оплатите первую часть подписки — 750 сом — по кнопке ниже.",
-  "2) Ознакомьтесь и подпишите договор: kghome.deno.dev",
-  "3) После первой оплаты прикрепите, пожалуйста, чек в договоре и подпишите его.",
-  "4) После заселения внесите вторую часть — 750 сом — и также прикрепите чек.",
+  "Оплатите первую часть подписки — 750 сом — по кнопке ниже.",
+  "Ознакомьтесь и подпишите договор: kghome.deno.dev",
+  "После первой оплаты прикрепите, пожалуйста, чек в договоре и подпишите его.",
+  "После заселения внесите вторую часть — 750 сом — и также прикрепите чек.",
 ].join("\n");
 
 function getKeyboard() {
@@ -64,13 +64,34 @@ async function callTelegram(method: string, payload: Record<string, unknown>) {
 }
 
 async function sendPaymentPost() {
-  await callTelegram("sendMessage", {
-    chat_id: CHAT_ID,
-    text: MESSAGE_TEXT,
-    reply_markup: getKeyboard(),
-    parse_mode: "HTML",
-    disable_web_page_preview: false,
-  });
+  // Пытаемся отправить фото с QR + текстом как caption
+  try {
+    const qrBytes = await Deno.readFile("./qr.png");
+    const form = new FormData();
+    form.append("chat_id", CHAT_ID as string);
+    form.append("caption", MESSAGE_TEXT);
+    form.append("photo", new Blob([qrBytes]), "qr.png");
+    form.append("reply_markup", JSON.stringify(getKeyboard()));
+
+    const res = await fetch(`${API_ROOT}/sendPhoto`, {
+      method: "POST",
+      body: form,
+    });
+
+    if (!res.ok) {
+      console.error("Telegram sendPhoto error, fallback to text", await res.text());
+      throw new Error("sendPhoto failed");
+    }
+  } catch (err) {
+    console.error("Failed to send photo, fallback to sendMessage", err);
+    await callTelegram("sendMessage", {
+      chat_id: CHAT_ID,
+      text: MESSAGE_TEXT,
+      reply_markup: getKeyboard(),
+      parse_mode: "HTML",
+      disable_web_page_preview: false,
+    });
+  }
 }
 
 async function handleUpdate(update: any) {
@@ -86,8 +107,7 @@ async function handleUpdate(update: any) {
       return;
     }
 
-    // В группах/супергруппах сейчас тоже ничего не отвечает.
-    // Если захочешь реакции в группе — допишем тут логику.
+    // В группах тоже ничего не отвечаем — бот только автопостит по /cron
     return;
   } catch (err) {
     console.error("handleUpdate error", err);
@@ -97,7 +117,7 @@ async function handleUpdate(update: any) {
 serve(async (req: Request) => {
   const url = new URL(req.url);
 
-  // Telegram webhook (корень)
+  // Telegram webhook
   if (req.method === "POST") {
     const update = await req.json().catch(() => null);
     if (update) {
@@ -106,7 +126,7 @@ serve(async (req: Request) => {
     return new Response("OK");
   }
 
-  // Эндпоинт для крон-запросов (автопост)
+  // Эндпоинт для автопостинга (крон)
   if (req.method === "GET" && url.pathname === "/cron") {
     const secret = url.searchParams.get("secret");
     if (!CRON_SECRET || secret !== CRON_SECRET) {
