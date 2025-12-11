@@ -2,7 +2,7 @@ name: Telegram payment post scheduler
 
 on:
   schedule:
-    - cron: "0 */6 * * *"
+    - cron: "0 */6 * * *"  # раз в 6 часов = 4 раза в день
   workflow_dispatch:
 
 jobs:
@@ -11,6 +11,6 @@ jobs:
     steps:
       - name: Call Deno Deploy cron endpoint
         run: |
-          curl -sS "https://YOUR_DENO_APP_URL/cron?secret=${CRON_SECRET}"
+          curl -sS "https://mueller-payment-62.deno.dev/cron?secret=${CRON_SECRET}"
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
