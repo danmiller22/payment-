@@ -81,13 +81,13 @@ async function handleUpdate(update: any) {
     const chat = message.chat;
     const chatType = chat?.type;
 
-    // Полный игнор лички
+    // Полный игнор личных чатов
     if (chatType === "private") {
       return;
     }
 
-    // Если захочешь когда-нибудь реакции в группе — можно дописать тут логику.
-    // Сейчас бот НИКОМУ и НИГДЕ не отвечает на команды, только автопостит по /cron.
+    // В группах/супергруппах сейчас тоже ничего не отвечает.
+    // Если захочешь реакции в группе — допишем тут логику.
     return;
   } catch (err) {
     console.error("handleUpdate error", err);
@@ -97,7 +97,7 @@ async function handleUpdate(update: any) {
 serve(async (req: Request) => {
   const url = new URL(req.url);
 
-  // Telegram webhook (корневой путь)
+  // Telegram webhook (корень)
   if (req.method === "POST") {
     const update = await req.json().catch(() => null);
     if (update) {
@@ -116,7 +116,7 @@ serve(async (req: Request) => {
     return new Response("sent");
   }
 
-  // Простой healthcheck
+  // Healthcheck
   if (req.method === "GET" && url.pathname === "/health") {
     return new Response("ok");
   }
