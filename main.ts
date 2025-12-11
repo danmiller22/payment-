@@ -2,7 +2,9 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 
 const BOT_TOKEN = Deno.env.get("BOT_TOKEN");
 const CHAT_ID = Deno.env.get("CHAT_ID");
-const PAYMENT_URL = Deno.env.get("PAYMENT_URL") ?? "https://qr.finik.kg/c1b526b5-040b-4eca-9017-6df94e6f8d71?type=t";
+const PAYMENT_URL =
+  Deno.env.get("PAYMENT_URL") ??
+  "https://qr.finik.kg/c1b526b5-040b-4eca-9017-6df94e6f8d71?type=t";
 const SUPPORT_USERNAME = Deno.env.get("SUPPORT_USERNAME") ?? "kghome_support";
 const CRON_SECRET = Deno.env.get("CRON_SECRET");
 
@@ -73,20 +75,20 @@ async function sendPaymentPost() {
 
 async function handleUpdate(update: any) {
   try {
-    if (update.message && update.message.text) {
-      const text: string = update.message.text;
-      const chatId = update.message.chat.id;
+    const message = update.message;
+    if (!message) return;
 
-      if (text.startsWith("/start") || text.startsWith("/help")) {
-        await callTelegram("sendMessage", {
-          chat_id: chatId,
-          text:
-            "Это автоматический бот рассылки по оплате.\n\n" +
-            "4 раза в день мы публикуем пост с условиями и ссылкой на оплату в закрытую группу.\n\n" +
-            "Чтобы оплатить подписку и получить доступ к номерам квартир, перейдите по кнопке \"Получить номера сейчас\" в группе.",
-        });
-      }
+    const chat = message.chat;
+    const chatType = chat?.type;
+
+    // Полный игнор лички
+    if (chatType === "private") {
+      return;
     }
+
+    // Если захочешь когда-нибудь реакции в группе — можно дописать тут логику.
+    // Сейчас бот НИКОМУ и НИГДЕ не отвечает на команды, только автопостит по /cron.
+    return;
   } catch (err) {
     console.error("handleUpdate error", err);
   }
@@ -95,7 +97,7 @@ async function handleUpdate(update: any) {
 serve(async (req: Request) => {
   const url = new URL(req.url);
 
-  // Telegram webhook
+  // Telegram webhook (корневой путь)
   if (req.method === "POST") {
     const update = await req.json().catch(() => null);
     if (update) {
@@ -104,6 +106,7 @@ serve(async (req: Request) => {
     return new Response("OK");
   }
 
+  // Эндпоинт для крон-запросов (автопост)
   if (req.method === "GET" && url.pathname === "/cron") {
     const secret = url.searchParams.get("secret");
     if (!CRON_SECRET || secret !== CRON_SECRET) {
@@ -113,6 +116,7 @@ serve(async (req: Request) => {
     return new Response("sent");
   }
 
+  // Простой healthcheck
   if (req.method === "GET" && url.pathname === "/health") {
     return new Response("ok");
   }
