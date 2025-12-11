@@ -5,7 +5,8 @@ const CHAT_ID = Deno.env.get("CHAT_ID");
 const PAYMENT_URL =
   Deno.env.get("PAYMENT_URL") ??
   "https://qr.finik.kg/c1b526b5-040b-4eca-9017-6df94e6f8d71?type=t";
-const SUPPORT_USERNAME = Deno.env.get("SUPPORT_USERNAME") ?? "kghome_support";
+const SUPPORT_URL =
+  Deno.env.get("SUPPORT_URL") ?? "https://t.me/maxkgz2";
 const CRON_SECRET = Deno.env.get("CRON_SECRET");
 
 if (!BOT_TOKEN || !CHAT_ID || !CRON_SECRET) {
@@ -31,7 +32,6 @@ const MESSAGE_TEXT = [
 ].join("\n");
 
 function getKeyboard() {
-  const supportUser = SUPPORT_USERNAME.replace(/^@/, "");
   return {
     inline_keyboard: [
       [
@@ -41,32 +41,34 @@ function getKeyboard() {
         },
         {
           text: "Связаться с техподдержкой",
-          url: `https://t.me/${supportUser}`,
+          url: SUPPORT_URL,
         },
       ],
     ],
   };
 }
 
-async function callTelegram(method: string, payload: Record<string, unknown>) {
-  if (!BOT_TOKEN) {
-    console.error("BOT_TOKEN is not set");
-    return;
-  }
-  const res = await fetch(`${API_ROOT}/${method}`, {
+async function pinMessage(messageId: number) {
+  if (!BOT_TOKEN) return;
+  const res = await fetch(`${API_ROOT}/pinChatMessage`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      chat_id: CHAT_ID,
+      message_id: messageId,
+      disable_notification: true,
+    }),
   });
   if (!res.ok) {
-    console.error("Telegram API error", method, await res.text());
+    console.error("Telegram pinChatMessage error", await res.text());
   }
 }
 
 async function sendPaymentPost() {
-  // Пытаемся отправить фото с QR + текстом как caption
+  // Пытаемся отправить фото с QR + текстом как caption и закрепить сообщение
   try {
     const qrBytes = await Deno.readFile("./qr.png");
+
     const form = new FormData();
     form.append("chat_id", CHAT_ID as string);
     form.append("caption", MESSAGE_TEXT);
@@ -78,19 +80,41 @@ async function sendPaymentPost() {
       body: form,
     });
 
-    if (!res.ok) {
-      console.error("Telegram sendPhoto error, fallback to text", await res.text());
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) {
+      console.error("Telegram sendPhoto error", data ?? (await res.text()));
       throw new Error("sendPhoto failed");
     }
+
+    const messageId = data.result?.message_id;
+    if (messageId) {
+      await pinMessage(messageId);
+    }
+    return;
   } catch (err) {
     console.error("Failed to send photo, fallback to sendMessage", err);
-    await callTelegram("sendMessage", {
+  }
+
+  // Фолбэк: просто текст + кнопки, тоже с закреплением
+  const res = await fetch(`${API_ROOT}/sendMessage`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
       chat_id: CHAT_ID,
       text: MESSAGE_TEXT,
       reply_markup: getKeyboard(),
-      parse_mode: "HTML",
       disable_web_page_preview: false,
-    });
+    }),
+  });
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data?.ok) {
+    console.error("Telegram sendMessage error", data ?? (await res.text()));
+    return;
+  }
+  const messageId = data.result?.message_id;
+  if (messageId) {
+    await pinMessage(messageId);
   }
 }
 
@@ -107,7 +131,7 @@ async function handleUpdate(update: any) {
       return;
     }
 
-    // В группах тоже ничего не отвечаем — бот только автопостит по /cron
+    // В группах тоже пока молчим на любые сообщения, бот только автопостит по /cron
     return;
   } catch (err) {
     console.error("handleUpdate error", err);
