@@ -2,7 +2,8 @@ name: Telegram payment post scheduler
 
 on:
   schedule:
-    - cron: "0 */6 * * *"  # раз в 6 часов = 4 раза в день
+    - cron: "0 6 * * *"   # 12:00 по Бишкеку
+    - cron: "0 15 * * *"  # 21:00 по Бишкеку
   workflow_dispatch:
 
 jobs:
