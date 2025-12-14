@@ -6,7 +6,7 @@ const PAYMENT_URL =
   Deno.env.get("PAYMENT_URL") ??
   "https://qr.finik.kg/c1b526b5-040b-4eca-9017-6df94e6f8d71?type=t";
 const SUPPORT_URL =
-  Deno.env.get("SUPPORT_URL") ?? "https://t.me/maxkgz2";
+  Deno.env.get("SUPPORT_URL") ?? "";
 const CRON_SECRET = Deno.env.get("CRON_SECRET");
 
 if (!BOT_TOKEN || !CHAT_ID || !CRON_SECRET) {
@@ -36,7 +36,7 @@ const MESSAGE_TEXT = [
 ].join("\n");
 
 function getKeyboard() {
-  return {
+  const keyboard: any = {
     inline_keyboard: [
       [
         {
@@ -44,14 +44,20 @@ function getKeyboard() {
           url: PAYMENT_URL,
         },
       ],
-      [
-        {
-          text: "Связаться с техподдержкой",
-          url: SUPPORT_URL,
-        },
-      ],
     ],
   };
+
+  // Если SUPPORT_URL не задан, не показываем кнопку техподдержки (и не светим ник).
+  if (SUPPORT_URL) {
+    keyboard.inline_keyboard.push([
+      {
+        text: "Связаться с техподдержкой",
+        url: SUPPORT_URL,
+      },
+    ]);
+  }
+
+  return keyboard;
 }
 
 async function pinMessage(messageId: number) {
@@ -71,12 +77,14 @@ async function pinMessage(messageId: number) {
 }
 
 async function sendPaymentPost() {
-  // Пытаемся отправить фото с QR + текстом как caption и закрепить сообщение
+  // Пытаемся отправить QR как фото, чтобы смотрелось лучше
   try {
-    const qrBytes = await Deno.readFile("./qr.png");
+    const qrRes = await fetch(PAYMENT_URL);
+    if (!qrRes.ok) throw new Error(`QR fetch failed: ${qrRes.status}`);
 
+    const qrBytes = new Uint8Array(await qrRes.arrayBuffer());
     const form = new FormData();
-    form.append("chat_id", CHAT_ID as string);
+    form.append("chat_id", CHAT_ID!);
     form.append("caption", MESSAGE_TEXT);
     form.append("photo", new Blob([qrBytes]), "qr.png");
     form.append("reply_markup", JSON.stringify(getKeyboard()));
