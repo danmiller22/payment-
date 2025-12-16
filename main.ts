@@ -5,10 +5,8 @@ const CHAT_ID = Deno.env.get("CHAT_ID");
 const PAYMENT_URL =
   Deno.env.get("PAYMENT_URL") ??
   "https://qr.finik.kg/c1b526b5-040b-4eca-9017-6df94e6f8d71?type=t";
-
-// если SUPPORT_URL не задан — кнопку не показываем (и ник не светим)
-const SUPPORT_URL = Deno.env.get("SUPPORT_URL") ?? "";
-
+const SUPPORT_URL =
+  Deno.env.get("SUPPORT_URL") ?? "https://t.me/maxkgz2";
 const CRON_SECRET = Deno.env.get("CRON_SECRET");
 
 if (!BOT_TOKEN || !CHAT_ID || !CRON_SECRET) {
@@ -38,7 +36,7 @@ const MESSAGE_TEXT = [
 ].join("\n");
 
 function getKeyboard() {
-  const keyboard: any = {
+  return {
     inline_keyboard: [
       [
         {
@@ -46,19 +44,14 @@ function getKeyboard() {
           url: PAYMENT_URL,
         },
       ],
+      [
+        {
+          text: "Связаться с техподдержкой",
+          url: SUPPORT_URL,
+        },
+      ],
     ],
   };
-
-  if (SUPPORT_URL) {
-    keyboard.inline_keyboard.push([
-      {
-        text: "Связаться с техподдержкой",
-        url: SUPPORT_URL,
-      },
-    ]);
-  }
-
-  return keyboard;
 }
 
 async function pinMessage(messageId: number) {
@@ -78,20 +71,14 @@ async function pinMessage(messageId: number) {
 }
 
 async function sendPaymentPost() {
-  // Пытаемся отправить QR как фото + текст (caption) и закрепить сообщение
+  // Пытаемся отправить фото с QR + текстом как caption и закрепить сообщение
   try {
-    // ВАЖНО: читаем qr.png относительно этого файла, а не cwd
-    const qrUrl = new URL("./qr.png", import.meta.url);
-    const qrBytes = await Deno.readFile(qrUrl);
+    const qrBytes = await Deno.readFile("./qr.png");
 
     const form = new FormData();
     form.append("chat_id", CHAT_ID as string);
     form.append("caption", MESSAGE_TEXT);
-
-    // Добавляем правильный mime-type
-    const qrBlob = new Blob([qrBytes], { type: "image/png" });
-    form.append("photo", qrBlob, "qr.png");
-
+    form.append("photo", new Blob([qrBytes]), "qr.png");
     form.append("reply_markup", JSON.stringify(getKeyboard()));
 
     const res = await fetch(`${API_ROOT}/sendPhoto`, {
